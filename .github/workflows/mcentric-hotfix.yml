@@ -11,23 +11,19 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Patch control center
+      - name: Patch control center auth
         run: |
           python3 - <<'PY'
           from pathlib import Path
           p=Path('mcentric-control-center/index.html')
           s=p.read_text()
-          s=s.replace("const USERS={bill:'Bill',jeff:'Jeff'}", "const USERS={'bill@mcentricnow.org':'Bill','jeff@mcentricnow.org':'Jeff'}")
-          s=s.replace("else alert('Use bill or jeff with password mission.')", "else alert('Incorrect email or password.')")
-          s=s.replace('placeholder="bill or jeff"', 'placeholder="Email address"')
-          s=s.replace('<p class="muted">Demo password: mission</p>', '')
-          s=s.replace('id="mt" value=', 'id="mt" placeholder="e.g., weekly MCENTRIC working meeting" value=')
-          s=s.replace('id="ml" value=', 'id="ml" placeholder="e.g., Zoom or meeting location" value=')
-          s=s.replace('id="mc" value=', 'id="mc" placeholder="e.g., Bill, Jeff" value=')
-          s=s.replace('id="mem" value=', 'id="mem" placeholder="e.g., name@mcentricnow.org" value=')
-          s=s.replace('id="mp" value=', 'id="mp" placeholder="e.g., phone number" value=')
-          s=s.replace('id="mpr">', 'id="mpr" placeholder="e.g., purpose or desired outcome">')
-          s=s.replace('id="mn">', 'id="mn" placeholder="e.g., notes or follow-up items">')
+          s=s.replace("const USERS={'bill@mcentricnow.org':'Bill','jeff@mcentricnow.org':'Jeff'},PASS='mission';", "const USERS={'bill@mcentricnow.org':'Bill','jeff@mcentricnow.org':'Jeff'};")
+          old="function doLogin(){let u=document.getElementById('user').value.trim().toLowerCase(),p=document.getElementById('pass').value;if(USERS[u]&&p===PASS){user={name:USERS[u]};save('mcentric_user',user);location.hash='home';render()}else alert('Incorrect email or password.')}"
+          new="async function doLogin(){let u=document.getElementById('user').value.trim().toLowerCase(),p=document.getElementById('pass').value;try{let r=await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:u,password:p})});let d=await r.json();if(r.ok&&d.ok){user={name:d.name};save('mcentric_user',user);location.hash='home';render()}else alert('Incorrect email or password.')}catch(e){alert('Login unavailable. Please try again.')}}"
+          if old not in s: raise SystemExit('Expected login function not found')
+          s=s.replace(old,new)
+          s=s.replace('id="user" placeholder="Email address"', 'id="user" type="email" autocomplete="username" placeholder="Email address"')
+          s=s.replace('id="pass" type="password" placeholder="password"', 'id="pass" type="password" autocomplete="current-password" placeholder="Password"')
           p.write_text(s)
           PY
       - name: Commit changes
@@ -35,5 +31,5 @@ jobs:
           git config user.name 'MCENTRIC Automation'
           git config user.email 'actions@users.noreply.github.com'
           git add mcentric-control-center/index.html
-          git diff --cached --quiet || git commit -m 'Refine Mission Control login and input guidance'
+          git diff --cached --quiet || git commit -m 'Wire Mission Control login to server auth'
           git push
